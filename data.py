@@ -29,17 +29,16 @@ def tokenize_caption(tokenizer, caption, is_train=True):
 
 class TrainDataset(torch.utils.data.Dataset):
     def __init__(
-        self,
-        data_root,
-        target_db,
-        tokenizer,
-        target_mode='F',
-        target_scale=None,
-        target_extra_key=None,
-        random_flip=False,
-        more_augment=False,
-        disable_prompts=False,
-    ):
+            self,
+            data_root,
+            target_db,
+            tokenizer,
+            target_mode='F',
+            target_scale=None,
+            target_extra_key=None,
+            random_flip=False,
+            more_augment=False,
+            disable_prompts=False):
         self.data_root = data_root
         self.env = lmdb.open(target_db, map_size=1024**3*100, readonly=True)
         self.txn = self.env.begin()
@@ -64,8 +63,7 @@ class TrainDataset(torch.utils.data.Dataset):
         self.aug_transform = A.Compose(tf)
         self.transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(0.5, 0.5),
-        ])
+            transforms.Normalize(0.5, 0.5),])
 
     def __len__(self):
         return self._length
@@ -81,19 +79,19 @@ class TrainDataset(torch.utils.data.Dataset):
         trg_key = entry['file_name'].split('.')[0]
         if self.target_extra_key:
             trg_key += f'-{self.target_extra_key}'
-        if self.target_mode == 'RGB':
-            target = Image.open(io.BytesIO(self.txn.get(trg_key.encode())))
-            if not target.mode == 'RGB':
-                target = target.convert('RGB')
-        elif self.target_mode == 'F':
-            target = np.load(io.BytesIO(self.txn.get(trg_key.encode())))['x']
-            if self.target_scale is not None:
-                if self.target_scale == -1:
-                    target = (target - target.min()) / (target.max() - target.min())
-                else:
-                    target = target / self.target_scale
-        else:
-            raise NotImplementedError
+        # if self.target_mode == 'RGB':
+        #     target = Image.open(io.BytesIO(self.txn.get(trg_key.encode())))
+        #     if not target.mode == 'RGB':
+        #         target = target.convert('RGB')
+        # elif self.target_mode == 'F':
+        target = np.load(io.BytesIO(self.txn.get(trg_key.encode())))['x']
+        if self.target_scale is not None:
+            if self.target_scale == -1:
+                target = (target - target.min()) / (target.max() - target.min())
+            else:
+                target = target / self.target_scale
+        # else:
+        #     raise NotImplementedError
 
         if self.do_augment:
             x = self.aug_transform(image=np.array(image), mask=np.array(target))

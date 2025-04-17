@@ -183,20 +183,14 @@ python tools/makedb.py INPUT_DIR OUTPUT_DB
 
 To reproduce the trained models, the following script is the basic setting for all tasks. The script is adaped from an [example](https://github.com/huggingface/diffusers/blob/v0.20.0/examples/text_to_image/train_text_to_image_lora.py) provided by huggingface.
 
-```shell
-DATA_DIR="/path/to/data"
-TARGET_DB="/path/to/target"
-OUTPUT_DIR="/path/to/output"
-
-accelerate launch --mixed_precision="fp16" train.py \
-    --train_data_dir=$DATA_DIR \
+```bash
+accelerate launch \
+    --num_processes=2 --mixed_precision="fp16" train.py \
     --train_batch_size=8 \
     --max_train_steps=50000 \
     --learning_rate=1e-04 \
     --lr_scheduler="cosine" \
     --lr_warmup_steps=0 \
-    --output_dir=$OUTPUT_DIR \
-    --target_db=$TARGET_DB \
     --prediction_type="v_prediction"
 ```
 

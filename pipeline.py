@@ -263,7 +263,7 @@ class Pipeline:
         # Convert images to latent space
         src = self.vae.encode(src.to(dtype=self.weight_dtype)).latent_dist.sample()
         src = src * self.vae.config.scaling_factor
-
+        
         trg = self.vae.encode(trg.to(dtype=self.weight_dtype)).latent_dist.sample()
         trg = trg * self.vae.config.scaling_factor
 

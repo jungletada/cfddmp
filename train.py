@@ -19,20 +19,20 @@ import argparse
 import logging
 import math
 from pathlib import Path
-
 import numpy as np
+from tqdm.auto import tqdm
+
 import torch
 import transformers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import ProjectConfiguration, set_seed
-from tqdm.auto import tqdm
 
 import diffusers
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version
 
-from data import TrainDataset
+from data_cfd import TrainDataset
 from pipeline import Pipeline
 
 
@@ -51,29 +51,28 @@ def parse_args():
     )
     parser.add_argument(
         "--train_data_dir", # $DATA_DIR 
-        required=True,
+        default='data/case_data1/fluent_data_fig',
         help="A folder containing the training data, following huggingface ImageFolder.",
     )
-    parser.add_argument(
-        "--target_db", # $TARGET_DB 
-        required=True,
-        help="A folder containing target data collected in lmdb"
-    )
-    parser.add_argument(
-        "--target_mode",
-        default="F",
-        choices=["RGB", "F"],
-        help="Set `F` for depth (default), otherwise `RGB`"
-    )
-    parser.add_argument(
-        "--target_scale",
-        type=float,
-        help="A float dividing target value, only meaningful when target_mode=F. -1 means normalize"
-    )
-    parser.add_argument(
-        "--target_extra_key",
-        help="Set `r` for albedo and `s` for shading. Meaningless for other targets"
-    )
+    # parser.add_argument(
+    #     "--target_db", # $TARGET_DB 
+    #     help="A folder containing target data collected in lmdb"
+    # )
+    # parser.add_argument(
+    #     "--target_mode",
+    #     default="F",
+    #     choices=["RGB", "F"],
+    #     help="Set `F` for depth (default), otherwise `RGB`"
+    # )
+    # parser.add_argument(
+    #     "--target_scale",
+    #     type=float,
+    #     help="A float dividing target value, only meaningful when target_mode=F. -1 means normalize"
+    # )
+    # parser.add_argument(
+    #     "--target_extra_key",
+    #     help="Set `r` for albedo and `s` for shading. Meaningless for other targets"
+    # )
     parser.add_argument(
         "--self_attn_only",
         action="store_true",
@@ -313,15 +312,9 @@ def main():
     )
 
     train_dataset = TrainDataset(
-            args.train_data_dir, 
-            args.target_db, 
-            pipeline.tokenizer, 
-            args.target_mode, 
-            args.target_scale,
-            args.target_extra_key,
-            args.random_flip,
-            args.more_augment,
-            args.disable_prompts,
+            data_root=args.train_data_dir,
+            tokenizer=pipeline.tokenizer, 
+            disable_prompts=args.disable_prompts,
     )
 
     # DataLoaders creation:
@@ -417,7 +410,7 @@ def main():
 
             with accelerator.accumulate(pipeline.unet):
                 loss = pipeline.train_batch(
-                    batch["rgb"], batch["pixel_values"], batch["input_ids"], args.snr_trunc, args.snr_gamma)
+                    batch["inputs"], batch["targets"], batch["text"], args.snr_trunc, args.snr_gamma)
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
