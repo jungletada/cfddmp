@@ -101,21 +101,22 @@ class Pipeline:
 
         if ckpt and os.path.isdir(ckpt): # automatically define lora from the state dict
             self.unet.load_attn_procs(ckpt)
-        else: # add new LoRA weights to the attention layers
-            # It's important to realize here how many attention weights will be added and of which sizes
-            # The sizes of the attention layers consist only of two different variables:
-            # 1) - the "hidden_size", which is increased according to `unet.config.block_out_channels`.
-            # 2) - the "cross attention size", which is set to `unet.config.cross_attention_dim`.
+        else: 
+            """
+            Add new LoRA weights to the attention layers
+            It's important to realize here how many attention weights will be added and of which sizes
+            The sizes of the attention layers consist only of two different variables:
+            1) - the "hidden_size", which is increased according to `unet.config.block_out_channels`.
+            2) - the "cross attention size", which is set to `unet.config.cross_attention_dim`.
 
-            # Let's first see how many attention processors we will have to set.
-            # For Stable Diffusion, it should be equal to:
-            # - down blocks (2x attention layers) * (2x transformer layers) * (3x down blocks) = 12
-            # - mid blocks (2x attention layers) * (1x transformer layers) * (1x mid blocks) = 2
-            # - up blocks (2x attention layers) * (3x transformer layers) * (3x down blocks) = 18
-            # => 32 layers
-
-            # Set correct lora layers
-            self.lora_attn_procs = {}
+            Let's first see how many attention processors we will have to set.
+            For Stable Diffusion, it should be equal to:
+            - down blocks (2x attention layers) * (2x transformer layers) * (3x down blocks) = 12
+            - mid blocks (2x attention layers) * (1x transformer layers) * (1x mid blocks) = 2
+            - up blocks (2x attention layers) * (3x transformer layers) * (3x down blocks) = 18
+            => 32 layers
+            """
+            self.lora_attn_procs = {} # Set correct lora layers
             for name in self.unet.attn_processors.keys():
                 if not self_attn_only or name.endswith('attn1.processor'):
                     cross_attention_dim = None if name.endswith('attn1.processor') else self.unet.config.cross_attention_dim
@@ -171,9 +172,8 @@ class Pipeline:
     @torch.no_grad()
     def infer_batch(
             self,
-            text_inputs=None,
-            init_latents=None,
-            src_imgs=None,
+            text_inputs,
+            src_imgs,
             src_inference_steps=50,
             trg_inference_steps=10,
             src_guidance_scale=7.5,
@@ -181,40 +181,39 @@ class Pipeline:
             generator=None,
             return_mid_latents=False,
     ):
-        if init_latents is None and src_imgs is None and text_inputs is None:
-            raise ValueError('cannot generate images')
+        # if init_latents is None and src_imgs is None and text_inputs is None:
+        #     raise ValueError('cannot generate images')
 
         if not self.has_prepared_infer:
             self.prepare_infer()
 
-        if text_inputs is not None:
-            text_embeds = self.text_encoder(text_inputs.to(self.device))[0]
-            uc_embeds = self.uncond_embeds.repeat(text_embeds.size(0), 1, 1)
-            cond_embeds = torch.cat([text_embeds, uc_embeds])
+        text_embeds = self.text_encoder(text_inputs.to(self.device))[0]
+        uc_embeds = self.uncond_embeds.repeat(text_embeds.size(0), 1, 1)
+        cond_embeds = torch.cat([text_embeds, uc_embeds])
 
-        if src_imgs is not None:
-            latents = self.vae.encode(src_imgs.to(device=self.device, dtype=self.weight_dtype)).latent_dist.sample()
-            latents = latents * self.vae.config.scaling_factor
-            src_latents = latents
-        else: # generate source images
-            if init_latents is not None:
-                latents = init_latents.to(device=self.device, dtype=self.weight_dtype)
-            else:
-                latents = torch.randn(text_embeds.size(0), 4, 64, 64, generator=generator)
-            latents = latents.to(device=self.device, dtype=self.weight_dtype) * self.scheduler.init_noise_sigma
+        latents = self.vae.encode(
+            src_imgs.to(device=self.device, dtype=self.weight_dtype)).latent_dist.sample()
+        latents = latents * self.vae.config.scaling_factor
+        src_latents = latents
+        # else: # generate source images
+        #     if init_latents is not None:
+        #         latents = init_latents.to(device=self.device, dtype=self.weight_dtype)
+        #     else:
+        #         latents = torch.randn(text_embeds.size(0), 4, 64, 64, generator=generator)
+        #     latents = latents.to(device=self.device, dtype=self.weight_dtype) * self.scheduler.init_noise_sigma
 
-            set_attn_processors(self.unet, self.orig_attn_procs)
-            self.scheduler.set_timesteps(src_inference_steps)
-            self.scheduler.register_to_config(prediction_type='epsilon')
-            for t in self.scheduler.timesteps:
-                latent_model_input = latents.repeat(2, 1, 1, 1)
-                latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep=t)
+        #     set_attn_processors(self.unet, self.orig_attn_procs)
+        #     self.scheduler.set_timesteps(src_inference_steps)
+        #     self.scheduler.register_to_config(prediction_type='epsilon')
+        #     for t in self.scheduler.timesteps:
+        #         latent_model_input = latents.repeat(2, 1, 1, 1)
+        #         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep=t)
 
-                noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=cond_embeds).sample
-                noise, noise_uncond = noise_pred.chunk(2)
-                noise = noise_uncond + src_guidance_scale * (noise - noise_uncond)
-                latents = self.scheduler.step(noise, t, latents).prev_sample
-            src_latents = latents
+        #         noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=cond_embeds).sample
+        #         noise, noise_uncond = noise_pred.chunk(2)
+        #         noise = noise_uncond + src_guidance_scale * (noise - noise_uncond)
+        #         latents = self.scheduler.step(noise, t, latents).prev_sample
+        #     src_latents = latents
 
         # Generate target images
         set_attn_processors(self.unet, self.lora_attn_procs)
@@ -256,8 +255,7 @@ class Pipeline:
         return InferStepOutput(
                 src_latents=src_latents, 
                 trg_latents=latents, 
-                mid_latents=mid_latents
-        )
+                mid_latents=mid_latents)
 
     def train_batch(self, src, trg, text_ids, snr_trunc=None, snr_gamma=None):
         # Convert images to latent space

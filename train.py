@@ -54,25 +54,6 @@ def parse_args():
         default='data/case_data1/fluent_data_fig',
         help="A folder containing the training data, following huggingface ImageFolder.",
     )
-    # parser.add_argument(
-    #     "--target_db", # $TARGET_DB 
-    #     help="A folder containing target data collected in lmdb"
-    # )
-    # parser.add_argument(
-    #     "--target_mode",
-    #     default="F",
-    #     choices=["RGB", "F"],
-    #     help="Set `F` for depth (default), otherwise `RGB`"
-    # )
-    # parser.add_argument(
-    #     "--target_scale",
-    #     type=float,
-    #     help="A float dividing target value, only meaningful when target_mode=F. -1 means normalize"
-    # )
-    # parser.add_argument(
-    #     "--target_extra_key",
-    #     help="Set `r` for albedo and `s` for shading. Meaningless for other targets"
-    # )
     parser.add_argument(
         "--self_attn_only",
         action="store_true",
@@ -84,32 +65,33 @@ def parse_args():
         help="Disable prompts"
     )
     parser.add_argument(
-        "--output_dir",  # $OUTPUT_DIR
+        "--output_dir",
         default="dmp-output",
         help="The output directory where the checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=42, help="A seed for reproducible training.")
+    # parser.add_argument(
+    #     "--resolution",
+    #     type=int,
+    #     default=512,
+    #     help=(
+    #         "The resolution for input images, all the images in the train/validation dataset"
+    #         "will be resized to this resolution."
+    #     ),
+    # )
+    # parser.add_argument(
+    #     "--random_flip",
+    #     action="store_true",
+    #     help="whether to randomly flip images horizontally",
+    # )
+    # parser.add_argument(
+    #     "--more_augment",
+    #     action="store_true",
+    #     help="whether to do more augmentation",
+    # )
     parser.add_argument(
-        "--resolution",
-        type=int,
-        default=512,
-        help=(
-            "The resolution for input images, all the images in the train/validation dataset"
-            "will be resized to this resolution."
-        ),
-    )
-    parser.add_argument(
-        "--random_flip",
-        action="store_true",
-        help="whether to randomly flip images horizontally",
-    )
-    parser.add_argument(
-        "--more_augment",
-        action="store_true",
-        help="whether to do more augmentation",
-    )
-    parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size", type=int, default=16, 
+        help="Batch size (per device) for the training dataloader."
     )
     parser.add_argument("--num_train_epochs", type=int, default=100)
     parser.add_argument(
@@ -255,7 +237,9 @@ def main():
     args = parse_args()
     logging_dir = Path(args.output_dir, args.logging_dir)
 
-    accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=logging_dir)
+    accelerator_project_config = ProjectConfiguration(
+        project_dir=args.output_dir, 
+        logging_dir=logging_dir)
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -296,6 +280,7 @@ def main():
             enable_xformers=args.enable_xformers_memory_efficient_attention,
             device=accelerator.device,
     )
+    
     lora_layers = pipeline.trainable_parameters()
 
     if args.scale_lr:
